@@ -16,7 +16,21 @@ typedef struct problema {
 	int* qttdPecas;
 } Problema;
 
+Problema loadTest(char* filename, int p);
 Problema getProblem(char** lines);
+
+int main(int argc, char* argv[]) {
+	//exemplo ./pcu prob03.txt 10 60 => 4 argumentos
+	if (argc == 4) {
+		//lógica no resto do programa
+		printf("Executar durante %s segundos.\n", argv[3]);
+		loadTest(argv[1], atoi(argv[2]));
+	} else {
+		printf("Utilização do programa: ./pcu [nome do teste] [n processos] [tempo em segundos]\n");
+	}
+
+	return EXIT_SUCCESS;
+}
 
 Problema loadTest(char* filename, int p) {
 	char filepath[100] = "";
@@ -32,23 +46,30 @@ Problema loadTest(char* filename, int p) {
 	printf("%d processos a usar...\n", p);
 
 	char line[1024];
+	char* tmp;
 	while (fgets(line, 1024, stream)) {
 		if(count == TEST_LINES) break;
 
-		char* tmp = strdup(line);
-		file[count] = (char*)malloc(sizeof(tmp)/sizeof(char));
-		strcpy(file[count], tmp);
+		tmp = strdup(line);
+		int lineSize = sizeof(line)/sizeof(char);
+
+		file[count] = (char*)malloc(lineSize);
+		strcpy(file[count++], tmp);
 
 		printf("%s", tmp);
-
-
 		free(tmp);
-		count++;
 	}
 	printf("\n");
-	getProblem(file);
+	Problema prob = getProblem(file);
+
+	for (int i = 0; i < TEST_LINES; i++) {
+		free(file[i]);
+	}
+	free(file);
 
 	fclose(stream);
+
+	return prob;
 }
 
 Problema getProblem(char** lines) {
@@ -56,37 +77,20 @@ Problema getProblem(char** lines) {
 	int m = atoi(lines[1]);
 	int maxComprimento = atoi(lines[2]);
 
-	char** tokens1 = splitString(lines[3], n, " ");
-	char** tokens2 = splitString(lines[4], n, " ");
+	char** tokens1 = splitString(lines[3], m, " ");
+	char** tokens2 = splitString(lines[4], m, " ");
 
-	int compPecas[n];
-	int qtddPecas[n];
-/*
-	printf("n:%d\n", n);
-	printf("m:%d\n", m);
-	printf("maxC:%d\n", maxComprimento);*/
+	int compPecas[m];
+	int qtddPecas[m];
 
-	for(int i = 0; i < n; i++) {
-		/*
-		printf("c%d: %s\n", i, tokens1[i]);
-		printf("q%d: %s\n", i, tokens2[i]);*/
+	for(int i = 0; i < m; i++) {
 		compPecas[i] = atoi(tokens1[i]);
 		qtddPecas[i] = atoi(tokens2[i]);
 	}
 
+	free(tokens1);
+	free(tokens2);
+
 	Problema p = {n, m, maxComprimento, compPecas, qtddPecas};
 	return p;
-
-}
-int main(int argc, char* argv[]) {
-	//exemplo ./pcu prob03.txt 10 60 => 4 argumentos
-	if (argc == 4) {
-		//lógica no resto do programa
-		printf("Executar durante %s segundos.\n", argv[3]);
-		loadTest(argv[1], atoi(argv[2]));
-	}
-
-
-
-	return EXIT_SUCCESS;
 }
