@@ -9,27 +9,41 @@
 #define TEST_LINES 5
 #define TEST_PATH "cpu_tests/"
 
+typedef struct solucao {
+	int** matrizPadrao;
+	int* vetorSolucao;
+} Solucao;
+
 typedef struct problema {
 	int n;
 	int m;
 	int maxComprimento;
 	int* compPecas;
-	int* qttdPecas;
+	int* qtddPecas;
 } Problema;
 
 Problema loadTest(char* filename, int p);
 Problema getProblem(char** lines);
 void getRandomMatrix(Problema p, int*** matrix);
+int getWaste(Problema p, int** matrix, int* solution);
 void destroyMatrix(Problema p, int** *ptMatrix);
 
 int main(int argc, char* argv[]) {
 	srand(time(NULL));
+
+	//memória partilhada
+	//iterações e tempo
+	//solucao
+
 	//exemplo ./pcu prob03.txt 10 60 => 4 argumentos
 	if (argc == 4) {
 		//lógica no resto do programa
 		printf("Executar durante %s segundos.\n", argv[3]);
 		Problema p = loadTest(argv[1], atoi(argv[2]));
 		int** matrix;
+
+		printf("\n%d", p.maxComprimento);
+		printf("\n%d", p.qtddPecas[0]);
 
 		getRandomMatrix(p, &matrix);
 		
@@ -40,6 +54,16 @@ int main(int argc, char* argv[]) {
 			}
 			printf("\n");
 		}
+
+		int a, b, c = 0;
+		scanf("%d", &a);
+		scanf("%d", &b);
+		scanf("%d", &c);
+
+		int solution[3] = {a, b, c};
+
+		int waste = getWaste(p, matrix, solution);
+		printf("Waste: %d", waste);
 
 		destroyMatrix(p, &matrix);
 	} else {
@@ -73,7 +97,6 @@ void getRandomMatrix(Problema p, int** *ptMatrix){
 				continue;
 			}
 
-
 			//definimos o intervalo como quantas vezes uma peça
 			//pode ir até o comprimento máximo
 			int generatedValue = rand() % ((atual / compPeca) + 1);
@@ -90,7 +113,7 @@ void getRandomMatrix(Problema p, int** *ptMatrix){
 
 void destroyMatrix(Problema p, int** *ptMatrix) {
 	int** matrix = *ptMatrix;
-
+ 
 	if (matrix == NULL) return;
 
 	for (int i = 0; i < p.n; i++) {
@@ -100,14 +123,95 @@ void destroyMatrix(Problema p, int** *ptMatrix) {
 	*ptMatrix = NULL;
 }
 
+bool validSolution(Problema p, int** matrix, int* solution) {
+	return true;
+}
+
+int getWaste(Problema p, int** matrix, int* solution) {
+	int waste = 0;
+	int temp = 0;
+	for (int i = 0; i < p.m; i++) {
+		for (int j = 0; j < p.n; j++) {
+			temp += (matrix[i][j] * solution[j]);
+		}
+		printf("%d\n", temp);
+		waste += temp - p.qtddPecas[i];
+		temp = 0;
+		printf("%d\n", waste);
+	}
+	return waste;
+}
+
+void generateSolution(Problema p, int** matrix, int* *ptSolution) {
+	
+	/*  1 3 20
+		3 0 2 | 20
+		1 3 0 | 10
+		0 0 1 | 20
+
+		Determinar valor máximo
+		arredondar sempre para cima
+		max_linha_1 = [20 / 3 = 6,... = 7, 0, 20 / 10 10]
+		max_linha_2 = [10, 4, 0]
+		max_linha_3 = [0, 0, 20]
+		max_global = [10, 4, 20] //escolhe-se sempre o valor mais alto da posição n de cada vetor
+		geramos um vetor solução gerando valores aleatórios a partir de 0 até os valores máximos.
+
+
+		[2, 3, 4] = [3x1 + 0x3 + 2x20 = 43, 1 x 1 + 3 x 3 + 0 x 20 = 10, 20]
+
+	 */
+
+/*
+	int* solution = (int*) calloc(p.m, sizeof(int));
+
+	for (int i = 0; i < p.m; i++) {
+		int qtdd = p.qtddPecas[i];
+		int max = INT_MAX;
+		int min = 0;
+		int sol = 0;
+		
+		for (int j = 0; j < p.n; j++) {
+			if (matrix[i][j] == 0) continue;
+
+			int n = 0;
+			if (qtdd % matrix[i][j] != 0)
+				n = 1;
+
+			n = n + (qtdd / matrix[i][j]);
+			if (n >= min) {
+				min = n;
+			}
+
+			if (n <= max) {
+				max = n;
+			}
+
+			if (max != min) {
+				sol = (rand() % (max - min + 1)) + min;
+			} else {
+				sol = max;
+			}
+		}
+		solution[i] = sol;
+	}
+
+	 //Quando encontra uma melhor solução (menos despredício)
+	 //apartir da memória partilhada, (usando semáforos)
+	 //substitui-se
+	 *ptSolution = solution;*/
+}
+
 Problema loadTest(char* filename, int p) {
 	char filepath[100] = "";
-	strcat(filepath, "cpu_tests/");
+	strcat(filepath, "pcu_tests/");
 	strcat(filepath, filename);
 	
 	char** file = (char**)malloc(TEST_LINES * sizeof(char*));
 
 	FILE* stream = fopen(filepath, "r");
+	if (stream == NULL)
+		printf("Ficheiro/Caminho inválido");
 
 	int count = 0;
 
@@ -148,8 +252,8 @@ Problema getProblem(char** lines) {
 	char** tokens1 = splitString(lines[3], m, " ");
 	char** tokens2 = splitString(lines[4], m, " ");
 
-	int compPecas[m];
-	int qtddPecas[m];
+	int* compPecas = (int*)malloc(m * sizeof(int));
+	int* qtddPecas = (int*)malloc(m * sizeof(int));
 
 	for(int i = 0; i < m; i++) {
 		compPecas[i] = atoi(tokens1[i]);
@@ -160,5 +264,6 @@ Problema getProblem(char** lines) {
 	free(tokens2);
 
 	Problema p = {n, m, maxComprimento, compPecas, qtddPecas};
+	printf("%d\n", p.qtddPecas[0]);
 	return p;
 }
