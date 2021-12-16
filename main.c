@@ -243,11 +243,14 @@ int* solutionChangeValue(Problema p, PtSolucao sol) {
 
 void ajr_pe_algorithm(Problema p, PtSolucao *ptSol) {
 	int num = rand() % 5;
-	PtSolucao sol = *ptSol;
 	
+	PtSolucao sol = *ptSol;
+	PtSolucao newSol;
+
 	if (num == 0) {
 	//20% - gerar uma nova solução e comparar
-		PtSolucao newSol = generateSolution(p, true);
+		newSol = generateSolution(p, true);
+		newSol->iterations = sol->iterations;
 		
 		if (newSol->score < sol->score) {
 			*ptSol = newSol;
@@ -258,7 +261,7 @@ void ajr_pe_algorithm(Problema p, PtSolucao *ptSol) {
 		int* newVectorSolution = solutionChangeValue(p, sol);
 
 		//criar cópia da *ptSol e substituir a solução nova
-		PtSolucao newSol = copySolution(p, sol);
+		newSol = copySolution(p, sol);
 		newSol->vetorSolucao = newVectorSolution;
 
 		int newScore = getWaste(p, newSol);
