@@ -3,11 +3,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 #include <time.h>
 #include "input.h"
 
 #define TEST_LINES 5
 #define TEST_PATH "pcu_tests/"
+
+//struct timeval tvi, tvf, tv_result;
 
 typedef struct solucao {
 	int** matrizPadrao;
@@ -41,6 +44,24 @@ PtSolucao generateSolution(Problema p, bool calculateScore);
 bool isValidSolution(Problema p, int** matrix, int* solution);
 void destroySolucao(Problema p, PtSolucao *ptSolucao);
 void ajr_pe_algorithm(Problema p, PtSolucao *ptSol);
+int* solutionChangeValue(Problema p, PtSolucao sol);
+int* generateVectorSolution(Problema p, PtSolucao sol);
+
+
+void printSolution(Problema p, PtSolucao sol) {
+	for (int i = 0; i < p.n; i++) {
+		for (int j = 0; j < p.m; j++) {
+			printf("%d ", sol->matrizPadrao[i][j]);
+		}
+		printf("\n");
+	}
+	printf("\n[");
+
+	for (int i = 0; i < p.m; i++) {
+		printf("%d ", sol->vetorSolucao[i]);
+	}
+	printf("]\n");
+}
 
 int main(int argc, char* argv[]) {
 	srand(time(NULL));
@@ -51,6 +72,10 @@ int main(int argc, char* argv[]) {
 
 	//exemplo ./pcu prob03.txt 10 60 => 4 argumentos
 	if (argc == 4) {
+		clock_t begin;
+		double time_spent;
+		double time_max = atof(argv[3]);
+
 		//lógica no resto do programa
 		printf("Executar durante %s segundos.\n", argv[3]);
 		Problema p = loadTest(argv[1], atoi(argv[2]));
@@ -59,18 +84,36 @@ int main(int argc, char* argv[]) {
 		PtSolucao solution;
 
 		solution = generateSolution(p, true);
+		
 
-		printf("\nMatriz inicial gerada:\n");
-		for (int i = 0; i < p.n; i++) {
-			for (int j = 0; j < p.m; j++) {
-				printf("%d ", solution->matrizPadrao[i][j]);
+		//https://stackoverflow.com/questions/47252131/how-to-countdown-time-in-seconds-in-c
+		printf("i  n problem    m   ttime     eval   iterations   time   objects\n");
+		begin = clock();
+		while(1) {
+			ajr_pe_algorithm(p, &solution);
+        	time_spent = (double)(clock() - begin) / CLOCKS_PER_SEC;
+			if (time_spent >= time_max) {
+				break;
 			}
+		}		
+
+		printf("\nMatriz com melhor solução gerada:\n");
+		printSolution(p, solution);
+		printf("Waste: %d\n", solution->score);
+		printf("Iterations%d\n", solution->iterations);
+		
+		/*
+		for (int i = 0; i < 20; i++) {
+			int* newSol = solutionChangeValue(p, solution);
+			for (int i = 0; i < p.m; i++) {
+				printf("%d ", newSol[i]);
+			}
+
+			free(newSol);
+			
 			printf("\n");
-		}
-
-
-		int waste = getWaste(p, solution);
-		printf("Waste: %d\n", waste);
+			printSolution(p, solution);
+		}*/
 		
 
 		destroySolucao(p, &solution);
@@ -104,9 +147,9 @@ bool isValidMatrix(Problema p, int** matrix) {
 
 
 void getRandomMatrix(Problema p, int** *ptMatrix) {
-	int** matrix = (int**) malloc(p.n * sizeof(int*));
+	int** matrix = (int**) calloc(p.n, sizeof(int*));
 	for (int i = 0; i < p.n; i++) {
-		matrix[i] = (int*) malloc(p.m * sizeof(int));
+		matrix[i] = (int*) calloc(p.m, sizeof(int));
 	}
 
 	int* compPecas = p.compPecas;
@@ -154,11 +197,12 @@ void destroyMatrix(Problema p, int** *ptMatrix) {
 
 bool isValidSolution(Problema p, int** matrix, int* solution) {
 	//verificação básica
-	printf("[ ");
+	//printf("[ ");
 	int pecas = 0;
+	int soma = 0;
 	for (int i = 0; i < p.n; i++) {
 		//printf("%d ", solution[i]);
-
+		soma += solution[i];
 		for (int j = 0; j < p.m; j++) {
 			pecas += matrix[i][j] * solution[j];
 		}
@@ -168,6 +212,9 @@ bool isValidSolution(Problema p, int** matrix, int* solution) {
 			return false;
 		}
 		pecas = 0;
+	}
+	if (soma == 0) {
+		return false;
 	}
 	//printf("]\n");
 
@@ -234,11 +281,65 @@ int lineSum(Problema p, int** matrix, int* solution, int i) {
 }
 
 int* solutionChangeValue(Problema p, PtSolucao sol) {
-	int* solution = (int*) calloc(p.m, sizeof(int));
-	//copiar os valores de sol->vectorSolucao
-	
-	//verificar os valores fixos (linhas com zeros = p.m - 1 e que )
-	return solution;
+    int* solution = (int*) calloc(p.m, sizeof(int));
+
+    int** matrix = sol->matrizPadrao;
+    int* zeros = sol->zeros;
+	int* maxValues = sol->maxValues;
+
+	//printf("zeros\n");
+    //copiar os valores de sol->vectorSolucao
+    for(int i = 0; i < p.m; i++) {
+        solution[i] = sol->vetorSolucao[i];
+		//printf("%d ", zeros[i]);
+    }
+
+    int pos = rand() % p.m;
+	//printf("pos: %d\n", pos);
+    int value = rand() % (maxValues[pos] +1);
+	int diagonal = 0;
+	//int iterations = 0;
+
+	do {
+		
+		//linha a linha
+		for(int j = 0; j < p.m; j++){
+			if (diagonal == p.m) 
+				return solution;
+
+			if (zeros[j] == p.m - 1 && matrix[j][pos] != 0) {
+				//verificar se é valor fixo
+				int n = matrix[j][pos];
+				int num = p.qtddPecas[pos] / n;
+				if  (p.qtddPecas[pos] % n != 0) {
+					num++;
+				}
+
+				//printf("%d\n", num);
+				//se for igual, é valor fixo, passamos a frente no máximo p.m vezes
+				if (num == maxValues[pos]) {
+						pos = (pos + 1) % p.m;
+						value = rand() % (maxValues[pos] +1);
+						//printf("new pos: %d\n", pos);
+						diagonal++;
+				} else {
+					break;
+				}
+			}
+		}
+		//printf("\n");
+		
+		solution[pos] = value;
+/*
+		iterations++;
+		if (iterations >= 1000000) {
+			//free(solution);
+			//printf("pimba\n");
+			break;
+		}*/
+    } while(!isValidSolution(p, matrix, solution));
+
+    return solution;
 }
 
 void ajr_pe_algorithm(Problema p, PtSolucao *ptSol) {
@@ -246,6 +347,13 @@ void ajr_pe_algorithm(Problema p, PtSolucao *ptSol) {
 	
 	PtSolucao sol = *ptSol;
 	PtSolucao newSol;
+/*
+	newSol = generateSolution(p, true);
+	newSol->iterations = sol->iterations;
+	
+	if (newSol->score < sol->score) {
+		*ptSol = newSol;
+	}*/
 
 	if (num == 0) {
 	//20% - gerar uma nova solução e comparar
@@ -253,11 +361,16 @@ void ajr_pe_algorithm(Problema p, PtSolucao *ptSol) {
 		newSol->iterations = sol->iterations;
 		
 		if (newSol->score < sol->score) {
+			destroySolucao(p, ptSol);
 			*ptSol = newSol;
 		}
+
+	 newSol->iterations++;
 		
 	} else {
+
 	//80% - altera um valor (que não seja o valor fixo)
+	/*
 		int* newVectorSolution = solutionChangeValue(p, sol);
 
 		//criar cópia da *ptSol e substituir a solução nova
@@ -272,7 +385,24 @@ void ajr_pe_algorithm(Problema p, PtSolucao *ptSol) {
 			*ptSol = newSol;
 		} else {
 			destroySolucao(p, &newSol);
+		}*/
+
+		//optamos por criar um novo vetor solução inteiro em vez de mudar um só valor.
+		int* newVectorSolution = generateVectorSolution(p, sol);
+		newSol = copySolution(p, sol);
+		newSol->vetorSolucao = newVectorSolution;
+	 	newSol->iterations++;
+
+		int newScore = getWaste(p, newSol);
+
+		if (newScore < sol->score) {
+			destroySolucao(p, ptSol);
+			newSol->score = newScore;
+			*ptSol = newSol;
+		} else {
+			destroySolucao(p, &newSol);
 		}
+
 	}
 
 	 //Quando encontra uma melhor solução (menos despredício)
@@ -280,7 +410,6 @@ void ajr_pe_algorithm(Problema p, PtSolucao *ptSol) {
 	 //substitui-se
 
 
-	 sol->iterations += 1;
 }
 
 
@@ -320,6 +449,47 @@ PtSolucao copySolution(Problema p, PtSolucao sol) {
 	return newSol;
 }
 
+int* generateVectorSolution(Problema p, PtSolucao sol) {
+
+	int* solution = (int*) calloc(p.m, sizeof(int));
+
+	int** matrix = sol->matrizPadrao;
+	int* maxValues = sol->maxValues;
+	int* zeros = sol->zeros;
+
+	//solução gerada tem que ser válida
+	do {
+		
+		//gerar valor
+		for (int i = 0; i < p.m; i++) {
+			solution[i] = rand() % (maxValues[i] + 1);
+		}
+
+		//verificar linhas só com um valor e corrigir-los para poupar tempo e evitar repetir a geração da solução.
+		for (int i = 0; i < p.n; i++) {
+			if (zeros[i] != p.m - 1) continue;
+
+			//verificar se o valor para gerar é menor que o atual (inválido)
+			for (int j = 0; j < p.m; j++) {
+				int n = matrix[i][j];
+				if (n == 0) continue;
+
+				int rand = p.qtddPecas[i] / n;
+				if  (p.qtddPecas[i] % n != 0) {
+					rand++;
+				}
+				//se for maior substituimos
+				if (rand > solution[j]) {
+					solution[j] = rand;
+				}
+			}
+		}
+	} while (!isValidSolution(p, matrix, solution));
+
+	return solution;
+
+}
+
 PtSolucao generateSolution(Problema p, bool calculateScore) {
 	//gerar matriz padrão
 	int** matrix;
@@ -354,7 +524,7 @@ PtSolucao generateSolution(Problema p, bool calculateScore) {
 	int* solution = (int*) calloc(p.m, sizeof(int));
 
 	//solução gerada tem que ser válida
-	int count = 0;
+	//int count = 0;
 	do {
 		
 		//gerar valor
@@ -383,11 +553,12 @@ PtSolucao generateSolution(Problema p, bool calculateScore) {
 		}
 
 		//demasiadas iterações ao gerar, safety exit
+		/*
 		count++;
 		if (count >= 1000) {
 			printf("fuck\n");
 			break;
-		}
+		}*/
 		
 	} while (!isValidSolution(p, matrix, solution));
 
@@ -417,7 +588,7 @@ void destroySolucao(Problema p, PtSolucao *ptSolucao) {
 	free(sol->zeros);
 
 	free(sol);
-	*ptSolucao = NULL;
+	//*ptSolucao = NULL;
 }
 
 
@@ -467,18 +638,24 @@ Problema loadTest(char* filename, int p) {
 
 Problema getProblem(char** lines) {
 	int n = atoi(lines[0]);
+	printf("n:%d\n", n);
 	int m = atoi(lines[1]);
+	printf("m:%d\n", m);
 	int maxComprimento = atoi(lines[2]);
+	printf("maxComprimento:%d\n", maxComprimento);
 
 	char** tokens1 = splitString(lines[3], m, " ");
 	char** tokens2 = splitString(lines[4], m, " ");
 
+	printf("pimba\n");
 	int* compPecas = (int*)malloc(m * sizeof(int));
 	int* qtddPecas = (int*)malloc(m * sizeof(int));
 
+	printf("pimba\n");
 	for(int i = 0; i < m; i++) {
 		compPecas[i] = atoi(tokens1[i]);
 		qtddPecas[i] = atoi(tokens2[i]);
+		printf("compPeca: %d - qtddPeca: %d\n", compPecas[i], qtddPecas[i]);
 	}
 
 	free(tokens1);
