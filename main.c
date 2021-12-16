@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
 		printf("\nMatriz com melhor solução gerada:\n");
 		printSolution(p, solution);
 		printf("Waste: %d\n", solution->score);
-		printf("Iterations%d\n", solution->iterations);
+		printf("Iterations: %d\n", solution->iterations);
 		
 		/*
 		for (int i = 0; i < 20; i++) {
@@ -346,6 +346,7 @@ void ajr_pe_algorithm(Problema p, PtSolucao *ptSol) {
 	int num = rand() % 5;
 	
 	PtSolucao sol = *ptSol;
+	sol->iterations++;
 	PtSolucao newSol;
 /*
 	newSol = generateSolution(p, true);
@@ -365,7 +366,6 @@ void ajr_pe_algorithm(Problema p, PtSolucao *ptSol) {
 			*ptSol = newSol;
 		}
 
-	 newSol->iterations++;
 		
 	} else {
 
@@ -391,7 +391,6 @@ void ajr_pe_algorithm(Problema p, PtSolucao *ptSol) {
 		int* newVectorSolution = generateVectorSolution(p, sol);
 		newSol = copySolution(p, sol);
 		newSol->vetorSolucao = newVectorSolution;
-	 	newSol->iterations++;
 
 		int newScore = getWaste(p, newSol);
 
@@ -638,24 +637,24 @@ Problema loadTest(char* filename, int p) {
 
 Problema getProblem(char** lines) {
 	int n = atoi(lines[0]);
-	printf("n:%d\n", n);
+	//printf("n:%d\n", n);
 	int m = atoi(lines[1]);
-	printf("m:%d\n", m);
+	//printf("m:%d\n", m);
 	int maxComprimento = atoi(lines[2]);
-	printf("maxComprimento:%d\n", maxComprimento);
+	//printf("maxComprimento:%d\n", maxComprimento);
 
 	char** tokens1 = splitString(lines[3], m, " ");
 	char** tokens2 = splitString(lines[4], m, " ");
 
-	printf("pimba\n");
+	//printf("pimba\n");
 	int* compPecas = (int*)malloc(m * sizeof(int));
 	int* qtddPecas = (int*)malloc(m * sizeof(int));
 
-	printf("pimba\n");
+	//printf("pimba\n");
 	for(int i = 0; i < m; i++) {
 		compPecas[i] = atoi(tokens1[i]);
 		qtddPecas[i] = atoi(tokens2[i]);
-		printf("compPeca: %d - qtddPeca: %d\n", compPecas[i], qtddPecas[i]);
+		//printf("compPeca: %d - qtddPeca: %d\n", compPecas[i], qtddPecas[i]);
 	}
 
 	free(tokens1);
