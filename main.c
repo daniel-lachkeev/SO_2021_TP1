@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
 		
 
 		//https://stackoverflow.com/questions/47252131/how-to-countdown-time-in-seconds-in-c
-		printf("i  n problem    m   ttime     eval   iterations   time   objects\n");
+		//printf("i  n problem    m   ttime     eval   iterations   time   objects\n");
 		begin = clock();
 		while(1) {
 			ajr_pe_algorithm(p, &solution);
