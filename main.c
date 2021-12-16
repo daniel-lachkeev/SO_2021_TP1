@@ -7,12 +7,20 @@
 #include "input.h"
 
 #define TEST_LINES 5
-#define TEST_PATH "cpu_tests/"
+#define TEST_PATH "pcu_tests/"
 
 typedef struct solucao {
 	int** matrizPadrao;
+
+	int* maxValues;		//valores máximos para gerar
+	int* zeros; 		//quantidade de zeros em cada linha
 	int* vetorSolucao;
+
+	int iterations;
+	int score;
 } Solucao;
+
+typedef Solucao* PtSolucao;
 
 typedef struct problema {
 	int n;
@@ -25,11 +33,13 @@ typedef struct problema {
 Problema loadTest(char* filename, int p);
 Problema getProblem(char** lines);
 void getRandomMatrix(Problema p, int*** matrix);
-int getWaste(Problema p, int** matrix, int* solution);
+int getWaste(Problema p, PtSolucao sol);
 void destroyMatrix(Problema p, int** *ptMatrix);
 bool isValidMatrix(Problema p, int** matrix);
-void generateSolution(Problema p, int** matrix, int* *ptSolution);
-bool validSolution(Problema p, int** matrix, int* solution);
+PtSolucao generateSolution(Problema p);
+bool isValidSolution(Problema p, int** matrix, int* solution);
+void destroySolucao(Problema p, PtSolucao *ptSolucao);
+void ajr_pe_algorithm(Problema p, PtSolucao sol);
 
 int main(int argc, char* argv[]) {
 	srand(time(NULL));
@@ -43,35 +53,26 @@ int main(int argc, char* argv[]) {
 		//lógica no resto do programa
 		printf("Executar durante %s segundos.\n", argv[3]);
 		Problema p = loadTest(argv[1], atoi(argv[2]));
-		int** matrix;
 
-		printf("\n%d", p.maxComprimento);
-		printf("\n%d", p.qtddPecas[0]);
+		//solução inicial
+		PtSolucao solution;
 
-		getRandomMatrix(p, &matrix);
-		
-		printf("\nMatriz gerada:\n");
+		solution = generateSolution(p);
+
+		printf("\nMatriz inicial gerada:\n");
 		for (int i = 0; i < p.n; i++) {
 			for (int j = 0; j < p.m; j++) {
-				printf("%d ", matrix[i][j]);
+				printf("%d ", solution->matrizPadrao[i][j]);
 			}
 			printf("\n");
 		}
 
-		int* solution;
 
-		if (isValidMatrix(p, matrix)) {
-			generateSolution(p, matrix, &solution);
-			if (validSolution(p, matrix, solution)) {
-				int waste = getWaste(p, matrix, solution);
-				printf("Waste: %d\n", waste);
-			}
-		} else {
-			printf("Matriz inválida\n");
-		}
+		int waste = getWaste(p, solution);
+		printf("Waste: %d\n", waste);
+		
 
-
-		destroyMatrix(p, &matrix);
+		destroySolucao(p, &solution);
 		free(p.compPecas);
 		free(p.qtddPecas);
 
@@ -79,14 +80,13 @@ int main(int argc, char* argv[]) {
 		printf("Utilização do programa: ./pcu [nome do teste] [n processos] [tempo em segundos]\n");
 	}
 
-
 	return EXIT_SUCCESS;
 }
 
 bool isValidMatrix(Problema p, int** matrix) {
 	int line = 0;
 
-	//percorrer por linha
+	//percorrer por linha (getRandomMatrix já garante por coluna)
 	for (int i = 0; i < p.n; i++) {
 		for (int j = 0; j < p.m; j++) {
 			line += matrix[i][j];
@@ -115,7 +115,6 @@ void getRandomMatrix(Problema p, int** *ptMatrix) {
 		int compPeca = 0;
 		int generatedValue = 0;
 		for(int j = 0; j < p.m; j++){
-			//invalid read of size 4
 			compPeca = compPecas[j];
 			
 			//Última posição do padrão tem que garantir
@@ -130,12 +129,11 @@ void getRandomMatrix(Problema p, int** *ptMatrix) {
 			generatedValue = rand() % ((atual / compPeca) + 1);
 
 			//garantir que a linha tem pelo menos um valor
+			//TODO
 
 			matrix[j][i] = generatedValue;
 			atual = atual - (matrix[j][i] * compPeca);
-			//printf("compPeca: %d, rand: %d, atual: %d\n", compPeca, generatedValue, atual);
 		}
-		//printf("\n");
 	}
 
 	*ptMatrix = matrix;
@@ -153,60 +151,58 @@ void destroyMatrix(Problema p, int** *ptMatrix) {
 	*ptMatrix = NULL;
 }
 
-bool validSolution(Problema p, int** matrix, int* solution) {
+bool isValidSolution(Problema p, int** matrix, int* solution) {
 	//verificação básica
 	printf("[ ");
 	int pecas = 0;
 	for (int i = 0; i < p.n; i++) {
-		printf("%d ", solution[i]);
-		/* não tenho a certeza sobre isto
-		if (solution[i] == 0) {
-			printf(" Inválido\n");
-			return false;
-		}*/
-		
+		//printf("%d ", solution[i]);
+
 		for (int j = 0; j < p.m; j++) {
 			pecas += matrix[i][j] * solution[j];
 		}
 
 		if (pecas < p.qtddPecas[i]) {
-			printf("Solução INVÁLIDA ]\n");
+			//printf("Solução INVÁLIDA ]\n");
 			return false;
 		}
 		pecas = 0;
 	}
-	printf("]\n");
+	//printf("]\n");
 
 	return true;
 }
 
-int getWaste(Problema p, int** matrix, int* solution) {
+int getWaste(Problema p, PtSolucao sol) {
 	int* wastePadrao = (int*) calloc(p.n, sizeof(int));
 	int* wastePecas = (int*) calloc(p.m, sizeof(int));
+
+	int* solution = sol->vetorSolucao;
+	int** matrix = sol->matrizPadrao;
 
 	int waste = 0;
 	int temp = 0;
 
 	//Despredício nas quantidades de peças
-	printf("Waste pecas:\n");
+	//printf("Waste pecas:\n");
 	for (int i = 0; i < p.m; i++) {
 		for (int j = 0; j < p.n; j++) {
 			wastePecas[i] += matrix[i][j] * solution[j];
 		}
 		wastePecas[i] = wastePecas[i] - p.qtddPecas[i];
-		printf("%d\n", wastePecas[i]);
+		//printf("%d\n", wastePecas[i]);
 	}
 
-	//Despredício nos padrões
+	//Despredício nos padrões (se utiliza o comprimento máximo todo)
 	temp = 0;
-	printf("Waste padrão:\n");
+	//printf("Waste padrão:\n");
 	for (int i = 0; i < p.n; i++) {
 		for (int j = 0; j < p.m; j++) {
 			//comprimento usado pelo padrão
-			printf("Padrão %d, %d peça(s), comp: %d - %dm\n", i, matrix[j][i], p.compPecas[j], matrix[j][i] * p.compPecas[j]);
+			//printf("Padrão %d, %d peça(s), comp: %d - %dm\n", i, matrix[j][i], p.compPecas[j], matrix[j][i] * p.compPecas[j]);
 			temp += matrix[j][i] * p.compPecas[j];
 		}
-		printf("\n");
+		//printf("\n");
 		
 		wastePadrao[i] = p.maxComprimento - temp;
 		temp = 0;
@@ -215,16 +211,17 @@ int getWaste(Problema p, int** matrix, int* solution) {
 	//Calcular despredício total
 	printf("\nDespredício total:\n");
 	for (int i = 0; i < p.m; i++) {
-		printf("Peça %d, %dm, qttd:%d - %dm waste\n", i, p.compPecas[i], wastePecas[i], wastePecas[i] * p.compPecas[i]);
-		printf("Padrão: %dm com %d peças\n\n", wastePadrao[i], p.qtddPecas[i]);
+		//printf("Peça %d, %dm, qttd:%d - %dm waste\n", i, p.compPecas[i], wastePecas[i], wastePecas[i] * p.compPecas[i]);
+		//printf("Padrão: %dm com %d peças\n\n", wastePadrao[i], p.qtddPecas[i]);
 
 		waste += wastePecas[i] * p.compPecas[i];
 		waste += wastePadrao[i] * p.qtddPecas[i];
 	}
 
-
 	free(wastePadrao);
 	free(wastePecas);
+
+	sol->score = waste;
 
 	return waste;
 }
@@ -237,8 +234,32 @@ int lineSum(Problema p, int** matrix, int* solution, int i) {
 	return sum;
 }
 
-void generateSolution(Problema p, int** matrix, int* *ptSolution) {
-	//max
+void ajr_pe_algorithm(Problema p, PtSolucao sol) {
+	int num = rand() % 5;
+
+	if (num == 0) {
+	//20% - gerar uma nova solução
+
+	
+
+	} else {
+	//80% - altera um valor (que não seja o valor fixo)
+
+	}
+
+	 //Quando encontra uma melhor solução (menos despredício)
+	 //apartir da memória partilhada, (usando semáforos)
+	 //substitui-se
+}
+
+PtSolucao generateSolution(Problema p) {
+	//gerar matriz padrão
+	int** matrix;
+
+	do {
+		getRandomMatrix(p, &matrix);
+	} while(!isValidMatrix(p, matrix));
+
 	int* maxValues = (int*) calloc(p.m, sizeof(int));
 	int* zeros = (int*) calloc(p.m, sizeof(int));
 
@@ -260,68 +281,24 @@ void generateSolution(Problema p, int** matrix, int* *ptSolution) {
 			}
 		}
 	}
-/*
-	//min
-	int* minValues = (int*) calloc(p.m, sizeof(int));
-	int sum = 0;
-	int min = 0;
-	for (int i = 0; i < p.n; i++) {
-		for (int j = 0; j < p.m; j++) {
-			sum += matrix[i][j];
-		}
-
-		if (sum == 0) continue;
-
-		//dividir qtddPecas por soma da linha e adicionar +1 caso a divisão não dá resto 0
-
-		min = p.qtddPecas[i] / sum;
-
-		if (p.qtddPecas[i] % sum != 0)
-			min++;
-
-		minValues[i] = min;
-
-		sum = 0;
-	}*/
 
 	//gerar solução;
 	int* solution = (int*) calloc(p.m, sizeof(int));
-
-	//int range = 0;
 
 	//solução gerada tem que ser válida
 	int count = 0;
 	do {
 		
+		//gerar valor
 		for (int i = 0; i < p.m; i++) {
-			printf("Zero - %d\n", zeros[i]);
-			//caso haja só um valor na linha, a solução é facil de calcular
-			//range = maxValues[i] - minValues[i];
-			/*
-			if (range == 0) {
-				solution[i] = maxValues[i];
-				continue;
-			}*/
-
-			//gera um valor entre [0, maxValue]
-			//caso haja só um valor na linha vai "gerar" sempre o valor máximo
 			solution[i] = rand() % (maxValues[i] + 1);
-
-			//solution[i] = (rand() % (maxValues[i] - min)) + min + 1;
 		}
 
-		//facilmente verificar linhas só com um valor e corrigir-los para poupar tempo e evitar repetir a geração da solução.
-		//int min = 0;
+		//verificar linhas só com um valor e corrigir-los para poupar tempo e evitar repetir a geração da solução.
 		for (int i = 0; i < p.n; i++) {
-			/*
-			if (zeros[i] == p.m - 1) {
-				min = maxValues[i] - 1;
-			} else {
-				continue;
-			}*/
 			if (zeros[i] != p.m - 1) continue;
 
-			//verificar se o valor para gerar é menor que o atual
+			//verificar se o valor para gerar é menor que o atual (inválido)
 			for (int j = 0; j < p.m; j++) {
 				int n = matrix[i][j];
 				if (n == 0) continue;
@@ -330,40 +307,53 @@ void generateSolution(Problema p, int** matrix, int* *ptSolution) {
 				if  (p.qtddPecas[i] % n != 0) {
 					rand++;
 				}
-				//se for substituimos
+				//se for maior substituimos
 				if (rand > solution[j]) {
 					solution[j] = rand;
 				}
-
 			}
-
-
-			//min = 0;
 		}
 
+		//demasiadas iterações ao gerar, safety exit
 		count++;
-
 		if (count >= 1000) {
 			printf("fuck\n");
 			break;
 		}
 		
-	} while (!validSolution(p, matrix, solution));
+	} while (!isValidSolution(p, matrix, solution));
 
-	free(maxValues);
-	free(zeros);
+	PtSolucao sol = (PtSolucao) malloc(sizeof(Solucao));
+	sol->matrizPadrao = matrix;
+	sol->maxValues = maxValues;
+	sol->vetorSolucao = solution;
+	sol->zeros = zeros;
+	sol->iterations = 0;
+	sol->score = -1;
 
-	*ptSolution = solution;
+	return sol;
+}
 
-	 //Quando encontra uma melhor solução (menos despredício)
-	 //apartir da memória partilhada, (usando semáforos)
-	 //substitui-se
+void destroySolucao(Problema p, PtSolucao *ptSolucao) {
+	PtSolucao sol = *ptSolucao;
+ 
+	if (sol == NULL) return;
+
+	destroyMatrix(p, &sol->matrizPadrao);
+	free(sol->maxValues);
+	free(sol->vetorSolucao);
+	free(sol->zeros);
+
+	free(sol);
+	*ptSolucao = NULL;
 }
 
 
 Problema loadTest(char* filename, int p) {
+	//TODO simplificar o código
+
 	char filepath[100] = "";
-	strcat(filepath, "pcu_tests/");
+	strcat(filepath, TEST_PATH);
 	strcat(filepath, filename);
 	
 	char** file = (char**)malloc(TEST_LINES * sizeof(char*));
@@ -387,10 +377,10 @@ Problema loadTest(char* filename, int p) {
 		file[count] = (char*)malloc(lineSize);
 		strcpy(file[count++], tmp);
 
-		printf("%s", tmp);
+		//printf("%s", tmp);
 		free(tmp);
 	}
-	printf("\n");
+	//printf("\n");
 	Problema prob = getProblem(file);
 
 	for (int i = 0; i < TEST_LINES; i++) {
@@ -423,6 +413,6 @@ Problema getProblem(char** lines) {
 	free(tokens2);
 
 	Problema p = {n, m, maxComprimento, compPecas, qtddPecas};
-	printf("%d\n", p.qtddPecas[0]);
+	//printf("%d\n", p.qtddPecas[0]);
 	return p;
 }
