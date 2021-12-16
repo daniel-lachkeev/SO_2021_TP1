@@ -36,10 +36,11 @@ void getRandomMatrix(Problema p, int*** matrix);
 int getWaste(Problema p, PtSolucao sol);
 void destroyMatrix(Problema p, int** *ptMatrix);
 bool isValidMatrix(Problema p, int** matrix);
-PtSolucao generateSolution(Problema p);
+PtSolucao copySolution(Problema p, PtSolucao sol);
+PtSolucao generateSolution(Problema p, bool calculateScore);
 bool isValidSolution(Problema p, int** matrix, int* solution);
 void destroySolucao(Problema p, PtSolucao *ptSolucao);
-void ajr_pe_algorithm(Problema p, PtSolucao sol);
+void ajr_pe_algorithm(Problema p, PtSolucao *ptSol);
 
 int main(int argc, char* argv[]) {
 	srand(time(NULL));
@@ -57,7 +58,7 @@ int main(int argc, char* argv[]) {
 		//solução inicial
 		PtSolucao solution;
 
-		solution = generateSolution(p);
+		solution = generateSolution(p, true);
 
 		printf("\nMatriz inicial gerada:\n");
 		for (int i = 0; i < p.n; i++) {
@@ -209,7 +210,7 @@ int getWaste(Problema p, PtSolucao sol) {
 	}
 
 	//Calcular despredício total
-	printf("\nDespredício total:\n");
+	//printf("\nDespredício total:\n");
 	for (int i = 0; i < p.m; i++) {
 		//printf("Peça %d, %dm, qttd:%d - %dm waste\n", i, p.compPecas[i], wastePecas[i], wastePecas[i] * p.compPecas[i]);
 		//printf("Padrão: %dm com %d peças\n\n", wastePadrao[i], p.qtddPecas[i]);
@@ -220,8 +221,6 @@ int getWaste(Problema p, PtSolucao sol) {
 
 	free(wastePadrao);
 	free(wastePecas);
-
-	sol->score = waste;
 
 	return waste;
 }
@@ -234,25 +233,91 @@ int lineSum(Problema p, int** matrix, int* solution, int i) {
 	return sum;
 }
 
-void ajr_pe_algorithm(Problema p, PtSolucao sol) {
-	int num = rand() % 5;
-
-	if (num == 0) {
-	//20% - gerar uma nova solução
-
+int* solutionChangeValue(Problema p, PtSolucao sol) {
+	int* solution = (int*) calloc(p.m, sizeof(int));
+	//copiar os valores de sol->vectorSolucao
 	
+	//verificar os valores fixos (linhas com zeros = p.m - 1 e que )
+	return solution;
+}
 
+void ajr_pe_algorithm(Problema p, PtSolucao *ptSol) {
+	int num = rand() % 5;
+	PtSolucao sol = *ptSol;
+	
+	if (num == 0) {
+	//20% - gerar uma nova solução e comparar
+		PtSolucao newSol = generateSolution(p, true);
+		
+		if (newSol->score < sol->score) {
+			*ptSol = newSol;
+		}
+		
 	} else {
 	//80% - altera um valor (que não seja o valor fixo)
+		int* newVectorSolution = solutionChangeValue(p, sol);
 
+		//criar cópia da *ptSol e substituir a solução nova
+		PtSolucao newSol = copySolution(p, sol);
+		newSol->vetorSolucao = newVectorSolution;
+
+		int newScore = getWaste(p, newSol);
+
+		if (newScore < sol->score) {
+			destroySolucao(p, ptSol);
+			newSol->score = newScore;
+			*ptSol = newSol;
+		} else {
+			destroySolucao(p, &newSol);
+		}
 	}
 
 	 //Quando encontra uma melhor solução (menos despredício)
 	 //apartir da memória partilhada, (usando semáforos)
 	 //substitui-se
+
+
+	 sol->iterations += 1;
 }
 
-PtSolucao generateSolution(Problema p) {
+
+PtSolucao copySolution(Problema p, PtSolucao sol) {
+	//TODO
+	PtSolucao newSol = (PtSolucao) malloc(sizeof(Solucao));
+
+	//copiar matriz
+	int** matrix = (int**) malloc(p.n * sizeof(int*));
+
+	for (int i = 0; i < p.n; i++) {
+		matrix[i] = (int*) malloc(p.m * sizeof(int));
+		for (int j = 0; j < p.m; j++) {
+			matrix[i][j] = sol->matrizPadrao[i][j];
+		}
+	}
+
+	//copiar maxValues, zeros e vetorSolucao
+	int* maxValues = (int*) calloc(p.m, sizeof(int));
+	int* zeros = (int*) calloc(p.m, sizeof(int));
+	int* vetorSolucao = (int*) calloc(p.m, sizeof(int));
+
+	for (int i = 0; i < p.m; i++) {
+		maxValues[i] = sol->maxValues[i];
+		zeros[i] = sol->zeros[i];
+		vetorSolucao[i] = sol->vetorSolucao[i];
+	}
+
+	newSol->matrizPadrao = matrix;
+	newSol->maxValues = maxValues;
+	newSol->vetorSolucao = vetorSolucao;
+	newSol->zeros = zeros;
+	newSol->iterations = sol->iterations;
+	//newSol->score = getWaste(p, newSol);
+	newSol->score = -1;
+
+	return newSol;
+}
+
+PtSolucao generateSolution(Problema p, bool calculateScore) {
 	//gerar matriz padrão
 	int** matrix;
 
@@ -329,7 +394,11 @@ PtSolucao generateSolution(Problema p) {
 	sol->vetorSolucao = solution;
 	sol->zeros = zeros;
 	sol->iterations = 0;
-	sol->score = -1;
+
+	if (calculateScore)
+		sol->score = getWaste(p, sol);
+	else
+		sol->score = -1;
 
 	return sol;
 }
